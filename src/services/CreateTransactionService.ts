@@ -1,10 +1,64 @@
-// import AppError from '../errors/AppError';
 
+import AppError from '../errors/AppError';
+import { getCustomRepository, getRepository} from 'typeorm';
+import TransactionsRepository from '../repositories/TransactionsRepository';
 import Transaction from '../models/Transaction';
+import Category from '../models/Category';
+
+interface Request {
+  title: string;
+  category: string;
+  value: number;
+  type: 'income' | 'outcome';
+}
 
 class CreateTransactionService {
-  public async execute(): Promise<Transaction> {
-    // TODO
+  
+  public async execute({ 
+    title, 
+    value, 
+    type, 
+    category,
+    }: Request): Promise<Transaction> {
+
+    const transactionsRepository = getCustomRepository(TransactionsRepository);
+
+    const categoryRepository = getRepository(Category);
+
+    const { total } = await transactionsRepository.getBalance();
+    
+    if (type === 'outcome' && total < value) {
+      throw new AppError('You do not have enough balance.');
+    }
+      // verificar se a categoria já existe
+      // existe? Buscar ela no BD e retornar o id 
+    let transactionCategory = await categoryRepository.findOne({
+      where: {
+        title: category,
+      },
+    });
+
+    // não existe? Cria uma nova categoria
+    if (!transactionCategory) {
+      transactionCategory = categoryRepository.create({
+        title: category,
+      });
+
+      await categoryRepository.save(transactionCategory);
+    }
+      
+    const transaction = transactionsRepository.create({
+      title,
+      value,
+      type,
+      category: transactionCategory,
+      
+    });
+    
+    await transactionsRepository.save(transaction);
+
+    return transaction;
+    
   }
 }
 
